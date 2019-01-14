@@ -2,8 +2,6 @@
 
 const asyncHooks = require('./async_hooks')
 const Scope = require('./scope')
-const Context = require('./context')
-const ContextExecution = require('./context_execution')
 
 let singleton = null
 
@@ -20,12 +18,8 @@ class ScopeManager {
 
     singleton = this
 
-    const execution = new ContextExecution()
-
-    this._active = execution
-    this._stack = []
+    this._scopes = new Map()
     this._contexts = new Map()
-    this._executions = new Map()
 
     this._hook = asyncHooks.createHook({
       init: this._init.bind(this),
@@ -46,19 +40,10 @@ class ScopeManager {
    * @returns {Scope} The active scope.
    */
   active () {
-    let execution = this._active
+    const eid = asyncHooks.executionAsyncId()
+    const context = this._contexts.get(eid)
 
-    while (execution !== null) {
-      const scope = execution.scope()
-
-      if (scope) {
-        return scope.span() ? scope : null
-      }
-
-      execution = execution.parent()
-    }
-
-    return null
+    return (context && context[context.length - 1]) || null
   }
 
   /**
@@ -69,55 +54,56 @@ class ScopeManager {
    * @returns {Scope} The newly created and now active scope.
    */
   activate (span, finishSpanOnClose) {
-    const execution = this._active
-    const scope = new Scope(span, execution, finishSpanOnClose)
+    const asyncId = asyncHooks.executionAsyncId()
+    const context = this._contexts.get(asyncId) || []
+    const scope = span ? new Scope(span, this, finishSpanOnClose) : null
 
-    execution.add(scope)
+    context.push(scope)
+
+    this._contexts.set(asyncId, context)
 
     return scope
   }
 
   _init (asyncId) {
-    const context = new Context()
+    const scope = this.active()
 
-    context.link(this._active)
-    context.retain()
-
-    this._contexts.set(asyncId, context)
+    if (scope) {
+      this._scopes.set(asyncId, scope)
+    }
   }
 
   _before (asyncId) {
-    const context = this._contexts.get(asyncId)
-
-    if (context) {
-      const execution = new ContextExecution(context)
-
-      execution.retain()
-
-      this._stack.push(this._active)
-      this._executions.set(asyncId, execution)
-      this._active = execution
-    }
+    const scope = this._scopes.get(asyncId)
+    this._contexts.set(asyncId, scope ? [scope] : [])
   }
 
   _after (asyncId) {
-    const execution = this._executions.get(asyncId)
-
-    if (execution) {
-      execution.exit()
-      execution.release()
-
-      this._active = this._stack.pop()
-      this._executions.delete(asyncId)
-    }
-  }
-
-  _destroy (asyncId) {
     const context = this._contexts.get(asyncId)
 
     if (context) {
       this._contexts.delete(asyncId)
-      context.release()
+
+      for (let i = 0, l = context.length; i < l; i++) {
+        context[i] && context[i].close()
+      }
+    }
+  }
+
+  _destroy (asyncId) {
+    this._scopes.delete(asyncId)
+  }
+
+  _close (scope) {
+    const eid = asyncHooks.executionAsyncId()
+    const context = this._contexts.get(eid)
+
+    if (context) {
+      const index = context.lastIndexOf(scope)
+
+      if (~index) {
+        context.splice(index, 1)
+      }
     }
   }
 

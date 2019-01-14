@@ -6,9 +6,9 @@
  * @hideconstructor
  */
 class Scope {
-  constructor (span, execution, finishSpanOnClose) {
+  constructor (span, manager, finishSpanOnClose) {
     this._span = span
-    this._execution = execution
+    this._manager = manager
     this._finishSpanOnClose = !!finishSpanOnClose
   }
 
@@ -29,7 +29,7 @@ class Scope {
       this._span.finish()
     }
 
-    this._execution.remove(this)
+    this._manager._close(this)
   }
 }
 
