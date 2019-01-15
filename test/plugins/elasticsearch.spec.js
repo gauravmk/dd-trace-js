@@ -117,9 +117,11 @@ describe('Plugin', () => {
               .then(done)
               .catch(done)
 
-            tracer.trace('test', span => {
-              client.ping(() => span.finish())
-            })
+            const span = tracer.startSpan('test')
+
+            tracer.scopeManager().activate(span)
+
+            client.ping(() => span.finish())
           })
 
           it('should run the callback in the parent context', done => {
@@ -180,11 +182,13 @@ describe('Plugin', () => {
               .then(done)
               .catch(done)
 
-            tracer.trace('test', span => {
-              client.ping()
-                .then(() => span.finish())
-                .catch(done)
-            })
+            const span = tracer.startSpan('test')
+
+            tracer.scopeManager().activate(span)
+
+            client.ping()
+              .then(() => span.finish())
+              .catch(done)
           })
 
           it('should run resolved promises in the parent context', () => {

@@ -4,36 +4,36 @@ describe('Scope', () => {
   let Scope
   let scope
   let span
-  let context
+  let manager
 
   beforeEach(() => {
     span = {
       finish: sinon.spy()
     }
 
-    context = {
-      remove: sinon.spy()
+    manager = {
+      _close: sinon.spy()
     }
 
     Scope = require('../../src/scope/scope')
   })
 
   it('should expose its span', () => {
-    scope = new Scope(span, context)
+    scope = new Scope(span, manager)
 
     expect(scope.span()).to.equal(span)
   })
 
   it('should remove itself from the context on close', () => {
-    scope = new Scope(span, context)
+    scope = new Scope(span, manager)
 
     scope.close()
 
-    expect(context.remove).to.have.been.calledWith(scope)
+    expect(manager._close).to.have.been.calledWith(scope)
   })
 
   it('should not finish the span on close by default', () => {
-    scope = new Scope(span, context)
+    scope = new Scope(span, manager)
 
     scope.close()
 
@@ -41,7 +41,7 @@ describe('Scope', () => {
   })
 
   it('should support enabling to finish the span on close', () => {
-    scope = new Scope(span, context, true)
+    scope = new Scope(span, manager, true)
 
     scope.close()
 

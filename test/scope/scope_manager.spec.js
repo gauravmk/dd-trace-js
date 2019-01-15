@@ -5,7 +5,6 @@ const Scope = require('../../src/scope/scope')
 describe('ScopeManager', () => {
   let ScopeManager
   let scopeManager
-  let asyncHooks
 
   beforeEach(() => {
     ScopeManager = require('../../src/scope/scope_manager')
