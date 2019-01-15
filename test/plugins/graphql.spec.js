@@ -650,6 +650,8 @@ describe('Plugin', () => {
           return graphql.graphql({ schema, source, rootValue })
             .then(value => {
               expect(value).to.have.nested.property('data.hello', 'test')
+              // console.log(tracer.scopeManager().active().span().context()._name)
+              // console.log(scope.span().context()._name)
               expect(tracer.scopeManager().active()).to.equal(scope)
             })
         })

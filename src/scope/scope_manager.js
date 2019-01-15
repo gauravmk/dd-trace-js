@@ -3,6 +3,9 @@
 const asyncHooks = require('./async_hooks')
 const Scope = require('./scope')
 
+// const fs = require('fs')
+// const log = msg => fs.writeSync(2, `${msg}\n`)
+
 let singleton = null
 
 /**
@@ -18,6 +21,8 @@ class ScopeManager {
 
     singleton = this
 
+    this._active = []
+    this._stack = []
     this._scopes = new Map()
     this._contexts = new Map()
 
@@ -40,8 +45,9 @@ class ScopeManager {
    * @returns {Scope} The active scope.
    */
   active () {
-    const eid = asyncHooks.executionAsyncId()
-    const context = this._contexts.get(eid)
+    // const eid = asyncHooks.executionAsyncId()
+    // log(`active ${this._currentId} ${eid}`)
+    const context = this._active
 
     return (context && context[context.length - 1]) || null
   }
@@ -54,18 +60,24 @@ class ScopeManager {
    * @returns {Scope} The newly created and now active scope.
    */
   activate (span, finishSpanOnClose) {
-    const asyncId = asyncHooks.executionAsyncId()
-    const context = this._contexts.get(asyncId) || []
+    // const asyncId = asyncHooks.executionAsyncId()
+    // log(`activate ${this._currentId} ${asyncId}`)
+    const context = this._active
     const scope = span ? new Scope(span, this, finishSpanOnClose) : null
 
     context.push(scope)
 
-    this._contexts.set(asyncId, context)
+    // this._contexts.set(asyncId, context)
 
     return scope
   }
 
   _init (asyncId) {
+    // const eid = asyncHooks.executionAsyncId()
+    // log(`active ${this._currentId} ${eid}`)
+    // const context = this.active()
+    // const scope = (context && context[context.length - 1]) || null
+
     const scope = this.active()
 
     if (scope) {
@@ -74,8 +86,14 @@ class ScopeManager {
   }
 
   _before (asyncId) {
+    // this._currentId = asyncId
+    // log(`active ${this._currentId} ${asyncHooks.executionAsyncId()}`)
     const scope = this._scopes.get(asyncId)
-    this._contexts.set(asyncId, scope ? [scope] : [])
+    const context = scope ? [scope] : []
+
+    this._contexts.set(asyncId, context)
+    this._stack.push(this._active)
+    this._active = context
   }
 
   _after (asyncId) {
@@ -83,6 +101,7 @@ class ScopeManager {
 
     if (context) {
       this._contexts.delete(asyncId)
+      this._active = this._stack.pop()
 
       for (let i = 0, l = context.length; i < l; i++) {
         context[i] && context[i].close()
@@ -95,8 +114,10 @@ class ScopeManager {
   }
 
   _close (scope) {
-    const eid = asyncHooks.executionAsyncId()
-    const context = this._contexts.get(eid)
+    // const eid = asyncHooks.executionAsyncId()
+    // const context = this._contexts.get(eid)
+
+    const context = this._active
 
     if (context) {
       const index = context.lastIndexOf(scope)
