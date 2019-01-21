@@ -60,22 +60,22 @@ describe('plugins/util/web', () => {
           'x-datadog-parent-id': '456'
         }
 
-        span = web.instrument(tracer, config, req, res, 'test.request')
-
-        expect(span.context()._traceId.toString()).to.equal('123')
-        expect(span.context()._parentId.toString()).to.equal('456')
+        web.instrument(tracer, config, req, res, 'test.request', span => {
+          expect(span.context()._traceId.toString()).to.equal('123')
+          expect(span.context()._parentId.toString()).to.equal('456')
+        })
       })
 
       it('should set the service name', () => {
         config.service = 'custom'
 
-        span = web.instrument(tracer, config, req, res, 'test.request')
-
-        expect(span.context()._tags).to.have.property(SERVICE_NAME, 'custom')
+        web.instrument(tracer, config, req, res, 'test.request', span => {
+          expect(span.context()._tags).to.have.property(SERVICE_NAME, 'custom')
+        })
       })
 
       it('should activate a scope with the span', () => {
-        span = web.instrument(tracer, config, req, res, 'test.request', span => {
+        web.instrument(tracer, config, req, res, 'test.request', span => {
           expect(tracer.scope().active()).to.equal(span)
         })
       })
@@ -85,27 +85,27 @@ describe('plugins/util/web', () => {
         req.url = '/user/123'
         res.statusCode = '200'
 
-        span = web.instrument(tracer, config, req, res, 'test.request')
+        web.instrument(tracer, config, req, res, 'test.request', span => {
+          res.end()
 
-        res.end()
-
-        expect(span.context()._tags).to.include({
-          [SPAN_TYPE]: HTTP,
-          [HTTP_URL]: 'http://localhost/user/123',
-          [HTTP_METHOD]: 'GET',
-          [SPAN_KIND]: SERVER
+          expect(span.context()._tags).to.include({
+            [SPAN_TYPE]: HTTP,
+            [HTTP_URL]: 'http://localhost/user/123',
+            [HTTP_METHOD]: 'GET',
+            [SPAN_KIND]: SERVER
+          })
         })
       })
 
       it('should add configured headers to the span tags', () => {
         config.headers = ['host']
 
-        span = web.instrument(tracer, config, req, res, 'test.request')
+        web.instrument(tracer, config, req, res, 'test.request', span => {
+          res.end()
 
-        res.end()
-
-        expect(span.context()._tags).to.include({
-          [`${HTTP_HEADERS}.host`]: 'localhost'
+          expect(span.context()._tags).to.include({
+            [`${HTTP_HEADERS}.host`]: 'localhost'
+          })
         })
       })
 
@@ -118,24 +118,26 @@ describe('plugins/util/web', () => {
       })
 
       it('should allow overriding the span name', () => {
-        span = web.instrument(tracer, config, req, res, 'test.request')
-        span = web.instrument(tracer, config, req, res, 'test2.request')
-
-        expect(span.context()._name).to.equal('test2.request')
+        web.instrument(tracer, config, req, res, 'test.request', () => {
+          web.instrument(tracer, config, req, res, 'test2.request', span => {
+            expect(span.context()._name).to.equal('test2.request')
+          })
+        })
       })
 
       it('should allow overriding the span service name', () => {
-        span = web.instrument(tracer, config, req, res, 'test.request')
-        config.service = 'test2'
-        span = web.instrument(tracer, config, req, res, 'test.request')
+        web.instrument(tracer, config, req, res, 'test.request', span => {
+          config.service = 'test2'
+          web.instrument(tracer, config, req, res, 'test.request')
 
-        expect(span.context()._tags).to.have.property('service.name', 'test2')
+          expect(span.context()._tags).to.have.property('service.name', 'test2')
+        })
       })
 
       it('should only wrap res.end once', () => {
-        span = web.instrument(tracer, config, req, res, 'test.request')
+        web.instrument(tracer, config, req, res, 'test.request')
         const end = res.end
-        span = web.instrument(tracer, config, req, res, 'test.request')
+        web.instrument(tracer, config, req, res, 'test.request')
 
         expect(end).to.equal(res.end)
       })
@@ -143,15 +145,17 @@ describe('plugins/util/web', () => {
       it('should configure event sampling', () => {
         config.eventSampleRate = 0.5
 
-        span = web.instrument(tracer, config, req, res, 'test.request')
-
-        expect(eventSampler.sample).to.have.been.calledWith(span, 0.5)
+        web.instrument(tracer, config, req, res, 'test.request', span => {
+          expect(eventSampler.sample).to.have.been.calledWith(span, 0.5)
+        })
       })
     })
 
     describe('on request end', () => {
       beforeEach(() => {
-        span = web.instrument(tracer, config, req, res, 'test.request')
+        web.instrument(tracer, config, req, res, 'test.request', reqSpan => {
+          span = reqSpan
+        })
       })
 
       it('should finish the request span', () => {
@@ -172,7 +176,7 @@ describe('plugins/util/web', () => {
       })
 
       it('should finish middleware spans', () => {
-        span = web.wrapMiddleware(req, () => {}, 'middleware', () => {
+        web.wrapMiddleware(req, () => {}, 'middleware', () => {
           const span = tracer.scope().active()
 
           sinon.spy(span, 'finish')
@@ -258,11 +262,11 @@ describe('plugins/util/web', () => {
           request: sinon.spy()
         }
 
-        span = web.instrument(tracer, config, req, res, 'test.request')
+        web.instrument(tracer, config, req, res, 'test.request', span => {
+          res.end()
 
-        res.end()
-
-        expect(config.hooks.request).to.have.been.calledWith(span, req, res)
+          expect(config.hooks.request).to.have.been.calledWith(span, req, res)
+        })
       })
 
       it('should set the resource name from the http.route tag set in the hooks', () => {
@@ -270,11 +274,11 @@ describe('plugins/util/web', () => {
           request: span => span.setTag('http.route', '/custom/route')
         }
 
-        span = web.instrument(tracer, config, req, res, 'test.request')
+        web.instrument(tracer, config, req, res, 'test.request', span => {
+          res.end()
 
-        res.end()
-
-        expect(span.context()._tags).to.have.property('resource.name', 'GET /custom/route')
+          expect(span.context()._tags).to.have.property('resource.name', 'GET /custom/route')
+        })
       })
     })
   })
@@ -282,7 +286,9 @@ describe('plugins/util/web', () => {
   describe('enterRoute', () => {
     beforeEach(() => {
       config = web.normalizeConfig(config)
-      span = web.instrument(tracer, config, req, res, 'test.request')
+      web.instrument(tracer, config, req, res, 'test.request', () => {
+        span = tracer.scope().active()
+      })
     })
 
     it('should add a route segment that will be added to the span resource name', () => {
@@ -300,7 +306,9 @@ describe('plugins/util/web', () => {
   describe('exitRoute', () => {
     beforeEach(() => {
       config = web.normalizeConfig(config)
-      span = web.instrument(tracer, config, req, res, 'test.request')
+      web.instrument(tracer, config, req, res, 'test.request', reqSpan => {
+        span = reqSpan
+      })
     })
 
     it('should remove a route segment', () => {
@@ -336,7 +344,9 @@ describe('plugins/util/web', () => {
   describe('finish', () => {
     beforeEach(() => {
       config = web.normalizeConfig(config)
-      span = web.instrument(tracer, config, req, res, 'test.request')
+      web.instrument(tracer, config, req, res, 'test.request', () => {
+        span = tracer.scope().active()
+      })
     })
 
     it('should finish the span of the current middleware', (done) => {
@@ -384,7 +394,7 @@ describe('plugins/util/web', () => {
 
   describe('active', () => {
     it('should return the request span by default', () => {
-      span = web.instrument(tracer, config, req, res, 'test.request', () => {
+      web.instrument(tracer, config, req, res, 'test.request', () => {
         expect(web.active(req)).to.equal(tracer.scope().active())
       })
     })

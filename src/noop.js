@@ -11,6 +11,7 @@ class NoopTracer extends Tracer {
 
     if (process.env.DD_CONTEXT_PROPAGATION === 'false') {
       ScopeManager = require('./scope/noop/scope_manager')
+      Scope = require('./scope/new/base')
     } else {
       ScopeManager = require('./scope/scope_manager')
       Scope = require('./scope/new/scope')

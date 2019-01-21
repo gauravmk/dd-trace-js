@@ -44,17 +44,17 @@ describe('Plugin', () => {
         })
 
         it('should not alter the default behavior', () => {
-          tracer.scopeManager().activate(span)
+          tracer.scope().activate(span, () => {
+            logger.info('message')
 
-          logger.info('message')
+            expect(stream.write).to.have.been.called
 
-          expect(stream.write).to.have.been.called
+            const record = JSON.parse(stream.write.firstCall.args[0].toString())
 
-          const record = JSON.parse(stream.write.firstCall.args[0].toString())
-
-          expect(record).to.not.include({
-            'dd.trace_id': span.context().toTraceId(),
-            'dd.span_id': span.context().toSpanId()
+            expect(record).to.not.include({
+              'dd.trace_id': span.context().toTraceId(),
+              'dd.span_id': span.context().toSpanId()
+            })
           })
         })
       })
@@ -68,17 +68,17 @@ describe('Plugin', () => {
         })
 
         it('should add the trace identifiers to logger instances', () => {
-          tracer.scopeManager().activate(span)
+          tracer.scope().activate(span, () => {
+            logger.info('message')
 
-          logger.info('message')
+            expect(stream.write).to.have.been.called
 
-          expect(stream.write).to.have.been.called
+            const record = JSON.parse(stream.write.firstCall.args[0].toString())
 
-          const record = JSON.parse(stream.write.firstCall.args[0].toString())
-
-          expect(record).to.include({
-            'dd.trace_id': span.context().toTraceId(),
-            'dd.span_id': span.context().toSpanId()
+            expect(record).to.include({
+              'dd.trace_id': span.context().toTraceId(),
+              'dd.span_id': span.context().toSpanId()
+            })
           })
         })
       })
