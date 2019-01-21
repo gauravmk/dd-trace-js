@@ -11,6 +11,7 @@ describe('Plugin', () => {
   let tcp
   let ipc
   let port
+  let tracer
 
   describe('net', () => {
     afterEach(() => {
@@ -26,6 +27,8 @@ describe('Plugin', () => {
     })
 
     beforeEach(() => {
+      tracer = require('../..')
+
       return agent.load(plugin, 'net')
         .then(() => {
           net = require(`net`)
@@ -147,6 +150,23 @@ describe('Plugin', () => {
       net.connect({
         path: '/tmp/dd-trace.sock'
       })
+    })
+
+    it('should be a child of the parent span when available', done => {
+      const span = tracer.startSpan('test')
+
+      agent
+        .use(traces => {
+          expect(traces[0][0].parent_id.toString()).to.equal(span.context().toSpanId())
+        })
+        .then(done)
+        .catch(done)
+
+      tracer.scope().activate(span, () => {
+        net.connect('/tmp/dd-trace.sock')
+      })
+
+      span.finish()
     })
   })
 })
