@@ -12,6 +12,7 @@ describe('Plugin', () => {
   let ipc
   let port
   let tracer
+  let parent
 
   describe('net', () => {
     afterEach(() => {
@@ -27,11 +28,12 @@ describe('Plugin', () => {
     })
 
     beforeEach(() => {
-      tracer = require('../..')
-
       return agent.load(plugin, 'net')
         .then(() => {
           net = require(`net`)
+          tracer = require('../..')
+          parent = tracer.startSpan('parent')
+          parent.finish()
 
           return getPort().then(_port => {
             port = _port
@@ -65,11 +67,14 @@ describe('Plugin', () => {
               'ipc.path': '/tmp/dd-trace.sock'
             }
           })
+          expect(traces[0][0].parent_id.toString()).to.equal(parent.context().toSpanId())
         })
         .then(done)
         .catch(done)
 
-      net.connect('/tmp/dd-trace.sock')
+      tracer.scope().activate(parent, () => {
+        net.connect('/tmp/dd-trace.sock')
+      })
     })
 
     it('should instrument connect with a port', done => {
@@ -93,11 +98,14 @@ describe('Plugin', () => {
               'out.port': `${port}`
             }
           })
+          expect(traces[0][0].parent_id.toString()).to.equal(parent.context().toSpanId())
         })
         .then(done)
         .catch(done)
 
-      socket.connect(port, 'localhost')
+      tracer.scope().activate(parent, () => {
+        socket.connect(port, 'localhost')
+      })
     })
 
     it('should instrument connect with TCP options', done => {
@@ -121,13 +129,16 @@ describe('Plugin', () => {
               'out.port': `${port}`
             }
           })
+          expect(traces[0][0].parent_id.toString()).to.equal(parent.context().toSpanId())
         })
         .then(done)
         .catch(done)
 
-      socket.connect({
-        port,
-        host: 'localhost'
+      tracer.scope().activate(parent, () => {
+        socket.connect({
+          port,
+          host: 'localhost'
+        })
       })
     })
 
@@ -143,29 +154,15 @@ describe('Plugin', () => {
               'ipc.path': '/tmp/dd-trace.sock'
             }
           })
+          expect(traces[0][0].parent_id.toString()).to.equal(parent.context().toSpanId())
         })
         .then(done)
         .catch(done)
 
-      net.connect({
-        path: '/tmp/dd-trace.sock'
-      })
-    })
-
-    it('should be a child of the parent span when available', done => {
-      const span = tracer.startSpan('test')
-
-      span.finish()
-
-      agent
-        .use(traces => {
-          expect(traces[0][0].parent_id.toString()).to.equal(span.context().toSpanId())
+      tracer.scope().activate(parent, () => {
+        net.connect({
+          path: '/tmp/dd-trace.sock'
         })
-        .then(done)
-        .catch(done)
-
-      tracer.scope().activate(span, () => {
-        net.connect('/tmp/dd-trace.sock')
       })
     })
   })
