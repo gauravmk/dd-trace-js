@@ -1,7 +1,7 @@
 'use strict'
 
 const BaseTracer = require('opentracing').Tracer
-const NoopTracer = require('./noop')
+const NoopTracer = require('./noop/tracer')
 const DatadogTracer = require('./tracer')
 const Config = require('./config')
 const Instrumenter = require('./instrumenter')
